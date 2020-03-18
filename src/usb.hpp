@@ -50,7 +50,7 @@ void   finalize();
 bool is_connected();
 
 template <typename Rep, typename Period>
-inline bool wait_ready(std::chrono::duration<Rep, Period> timeout) {
+static inline bool wait_ready(std::chrono::duration<Rep, Period> timeout) {
     auto stop_time = std::chrono::system_clock::now() + timeout;
     while (std::chrono::system_clock::now() < stop_time) {
         if (is_connected())
@@ -61,10 +61,7 @@ inline bool wait_ready(std::chrono::duration<Rep, Period> timeout) {
 }
 
 // buf must be page-aligned
-inline Result begin_xfer(UsbDsEndpoint *endpoint, void *buf, std::size_t size, std::uint32_t *urb_id) {
-    return usbDsEndpoint_PostBufferAsync(endpoint, buf, size, urb_id);
-}
-
+Result begin_xfer(UsbDsEndpoint *endpoint, void *buf, std::size_t size, std::uint32_t *urb_id);
 Result wait_xfer(UsbDsEndpoint *endpoint, std::uint32_t urb_id, std::uint64_t timeout_ns, std::size_t *xferd_size);
 
 Result send(const void *buf, std::size_t size, std::size_t *out_size);

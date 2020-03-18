@@ -101,11 +101,11 @@ int main(int argc, char **argv) {
     bool should_exit = false;
     auto exit_thread = std::thread(exit_thread_func, &should_exit);
 
-    // Wait for usb connection
-    while (!should_exit && !nq::usb::wait_ready(1s));
-    TRACE("Usb ready\n");
-
     while (!should_exit) {
+        // Wait for usb connection
+        if (!nq::usb::wait_ready(100ms))
+            continue;
+
         if (auto rc = server.process(); rc)
             TRACE("Successfully processed request\n\n");
         else if (rc != nq::err::KernelTimedOut)

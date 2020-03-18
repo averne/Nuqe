@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <switch.h>
 
+#include "error.hpp"
 #include "utils.hpp"
 
 #include "usb.hpp"
@@ -238,6 +239,12 @@ void finalize() {
 
 bool is_connected() {
     return check_state();
+}
+
+Result begin_xfer(UsbDsEndpoint *endpoint, void *buf, std::size_t size, std::uint32_t *urb_id) {
+    if (!is_connected())
+        return err::FailedUsbXfer;
+    return usbDsEndpoint_PostBufferAsync(endpoint, buf, size, urb_id);
 }
 
 Result wait_xfer(UsbDsEndpoint *endpoint, std::uint32_t urb_id, std::uint64_t timeout_ns, std::size_t *xferd_size) {
