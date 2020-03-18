@@ -1,0 +1,87 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "all",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "all",
+                "-j$(nproc)"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": "absolute"
+            }
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "clean"
+            ],
+            "presentation": {
+                "panel": "shared",
+                "reveal": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "mrproper",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "mrproper"
+            ],
+            "presentation": {
+                "panel": "shared",
+                "reveal": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "nxlink",
+            "args": [
+                "-p",
+                "Nuqe.nro",
+                "-s",
+                "${workspaceRoot}/out/Nuqe.nro"
+            ],
+            "dependsOn": "all",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "addr2line",
+            "type": "shell",
+            "command": "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-addr2line",
+            "args": [
+                "-p",
+                "-fiCr",
+                "-e",
+                "${workspaceRoot}/out/Nuqe.elf"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        }
+    ]
+}

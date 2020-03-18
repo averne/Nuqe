@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "DKP Aarch64",
+            "includePath": [
+                "${workspaceFolder}/**",
+
+                "~/Bureau/Switch/libnx/nx/source",
+                "~/Bureau/Switch/libnx/nx/include/switch",
+
+                "${DEVKITPRO}/devkitA64/aarch64-none-elf/include",
+                "${DEVKITPRO}/devkitA64/lib/gcc/aarch64-none-elf/*/include",
+
+                "${DEVKITPRO}/libnx/include",
+                "${DEVKITPRO}/portlibs/switch/include"
+            ],
+            "defines": [
+                "__SWITCH__",
+                "DEBUG",
+                "LOG_NXLINK",
+                "VERSION=\"0.0.0\"",
+                "COMMIT=\"0000000\""
+            ],
+            "compilerPath": "${DEVKITPRO}/devkitA64/bin/aarch64-none-elf-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
