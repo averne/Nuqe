@@ -3,15 +3,9 @@
 #include "mtp_object.hpp"
 #include "mtp_packet.hpp"
 #include "mtp_properties.hpp"
+#include "mtp_storage.hpp"
 
 namespace nq::mtp::props {
-
-namespace {
-
-String device_friendly_name    = u"Switch";
-String synchronization_partner = u"Nuqe";
-
-} // namespace
 
 ResponseCode get_device_prop_desc(DataPacket &packet, DevicePropertyCode property) {
     switch (property) {
@@ -19,16 +13,16 @@ ResponseCode get_device_prop_desc(DataPacket &packet, DevicePropertyCode propert
                 DevicePropDesc<String> prop;
                 prop.code          = DevicePropertyCode::Device_Friendly_Name;
                 prop.type          = TypeCode::STR;
-                prop.default_value = device_friendly_name;
-                prop.current_value = device_friendly_name;
+                prop.default_value = dev::device_friendly_name;
+                prop.current_value = dev::device_friendly_name;
                 prop.push_to(packet);
             } break;
         case DevicePropertyCode::Synchronization_Partner: {
                 DevicePropDesc<String> prop;
                 prop.code          = DevicePropertyCode::Synchronization_Partner;
                 prop.type          = TypeCode::STR;
-                prop.default_value = synchronization_partner;
-                prop.current_value = synchronization_partner;
+                prop.default_value = dev::synchronization_partner;
+                prop.current_value = dev::synchronization_partner;
                 prop.push_to(packet);
             } break;
         default:
@@ -41,10 +35,10 @@ ResponseCode get_device_prop_desc(DataPacket &packet, DevicePropertyCode propert
 ResponseCode get_device_prop_value(DataPacket &packet, DevicePropertyCode property) {
     switch (property) {
         case DevicePropertyCode::Device_Friendly_Name:
-            packet.push(device_friendly_name);
+            packet.push(dev::device_friendly_name);
             break;
         case DevicePropertyCode::Synchronization_Partner:
-            packet.push(synchronization_partner);
+            packet.push(dev::synchronization_partner);
             break;
         default:
             ERROR("Device property value %#x not implemented\n", property);
@@ -55,29 +49,11 @@ ResponseCode get_device_prop_value(DataPacket &packet, DevicePropertyCode proper
 
 ResponseCode get_object_props_supported(DataPacket &packet, ObjectFormatCode format) {
     Array<ObjectPropertyCode> props;
-    switch (format) {
-        case ObjectFormatCode::Undefined:
-            props.add(std::array{
-                ObjectPropertyCode::StorageID,
-                ObjectPropertyCode::Object_Format,
-                ObjectPropertyCode::Object_Size,
-                ObjectPropertyCode::Object_File_Name,
-                ObjectPropertyCode::Date_Created,
-                ObjectPropertyCode::Date_Modified,
-                ObjectPropertyCode::Parent_Object,
-            });
-            break;
-        case ObjectFormatCode::Association:
-            props.add(std::array{
-                ObjectPropertyCode::StorageID,
-                ObjectPropertyCode::Object_Format,
-                ObjectPropertyCode::Object_File_Name,
-                ObjectPropertyCode::Parent_Object,
-            });
-            break;
-        default:
-            ERROR("Object props supported %#x not implemented\n", format);
-            return ResponseCode::Operation_Not_Supported;
+    if (auto it = obj::supported.find(format); it != obj::supported.end()) {
+        props.add(it->second);
+    } else {
+        ERROR("Object props supported %#x not implemented\n", format);
+        return ResponseCode::Operation_Not_Supported;
     }
     packet.push(props);
     return ResponseCode::OK;

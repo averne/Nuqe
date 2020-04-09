@@ -26,10 +26,12 @@ struct Array {
         std::copy(elements.begin(), elements.end(), std::back_inserter(this->elements));
     }
 
+    inline Array(const std::vector<T> &elements): num_elements(elements.size()), elements(std::move(elements)) { }
+
     inline Array(const std::uint32_t *data) {
-        this->num_elements = data[0];
+        this->num_elements += data[0];
         this->elements.reserve(this->num_elements);
-        std::copy_n(reinterpret_cast<const Type *>(data + 1), this->num_elements, std::back_inserter(this->elements));
+        std::copy_n(reinterpret_cast<const Type *>(data + 1), data[0], std::back_inserter(this->elements));
     }
 
     inline void add(Type element) {
@@ -40,7 +42,13 @@ struct Array {
     template <std::size_t N>
     inline void add(const std::array<Type, N> &elements) {
         this->num_elements += elements.size();
-        this->elements.reserve(this->elements.size() + elements.size());
+        this->elements.reserve(this->num_elements);
+        std::copy(elements.begin(), elements.end(), std::back_inserter(this->elements));
+    }
+
+    inline void add(const std::vector<Type> &elements) {
+        this->num_elements += elements.size();
+        this->elements.reserve(this->num_elements);
         std::copy(elements.begin(), elements.end(), std::back_inserter(this->elements));
     }
 
@@ -50,7 +58,7 @@ struct Array {
 };
 
 struct String {
-    std::uint8_t  num_chars = 0;
+    std::uint8_t   num_chars = 0;
     std::u16string chars;
 
     inline String() = default;
@@ -83,9 +91,9 @@ struct DateTime {
 
     void format(std::uint64_t timestamp) {
         auto tmp = std::string(16, 0);
-        auto t = static_cast<time_t>(timestamp);
-        auto dt = localtime(&t);
-        strftime(tmp.data(), tmp.capacity(), "%04Y%02m%02dT%02H%02M%02S", dt);
+        TimeCalendarTime t;
+        R_TRY(timeToCalendarTimeWithMyRule(timestamp, &t, nullptr), return);
+        std::snprintf(tmp.data(), tmp.capacity(), "%04d%02d%02dT%02d%02d%02d", t.year, t.month, t.day, t.hour, t.minute, t.second);
         this->str = tmp;
     }
 
@@ -93,26 +101,6 @@ struct DateTime {
         return this->str;
     }
 };
-
-struct StorageId {
-    union {
-        std::uint32_t id = 0;
-        struct {
-            std::uint16_t partition; // Lower 16 bits (little endian)
-            std::uint16_t location;  // Higher 16 bits
-        };
-    };
-
-    constexpr inline StorageId(): id(0) { };
-    constexpr inline StorageId(const StorageId &other): id(other.id) { }
-    constexpr inline StorageId(std::uint32_t id): id(id) { }
-    constexpr inline StorageId(std::uint16_t location, std::uint16_t partition): partition(partition), location(location) { }
-
-    constexpr inline operator std::uint32_t() const {
-        return this->id;
-    }
-};
-ASSERT_SIZE(StorageId, 4);
 
 namespace traits {
 

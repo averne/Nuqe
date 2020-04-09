@@ -16,6 +16,26 @@ namespace nq::mtp {
 
 constexpr inline std::uint32_t root_handle = 0xffffffff;
 
+struct StorageId {
+    union {
+        std::uint32_t id = 0;
+        struct {
+            std::uint16_t partition; // Lower 16 bits (little endian)
+            std::uint16_t location;  // Higher 16 bits
+        };
+    };
+
+    constexpr inline StorageId(): id(0) { };
+    constexpr inline StorageId(const StorageId &other): id(other.id) { }
+    constexpr inline StorageId(std::uint32_t id): id(id) { }
+    constexpr inline StorageId(std::uint16_t location, std::uint16_t partition): partition(partition), location(location) { }
+
+    constexpr inline operator std::uint32_t() const {
+        return this->id;
+    }
+};
+ASSERT_SIZE(StorageId, 4);
+
 struct StorageInfo {
     StorageType      storage_type       = StorageType::Undefined;
     FilesystemType   filesystem_type    = FilesystemType::Undefined;
@@ -51,7 +71,7 @@ struct ObjectInfo {
     ObjectInfo() = default;
     ObjectInfo(DataPacket &packet);
     ObjectInfo(StorageId id, const Object &object):
-        storage_id(id), format(object.format()), compressed_size(object.size), parent(object.parent->handle), filename(object.name) { }
+        storage_id(id), format(object.format), compressed_size(object.size), parent(object.parent->handle), filename(object.name) { }
 
     void push_to(DataPacket &packet);
 };
@@ -74,7 +94,10 @@ struct Storage {
         this->storage_info.max_capacity = this->fs.total_space();
     }
 
-    ResponseCode get_object_handles(DataPacket &packet, Object::Handle handle);
+    std::vector<Object::Handle> cache_directory(Object *object, std::uint32_t depth = 0, std::uint32_t cur_depth = 0);
+
+    ResponseCode get_storage_info(DataPacket &packet);
+    ResponseCode get_object_handles(DataPacket &packet, Object *object);
     ResponseCode get_object_info(DataPacket &packet, Object *object);
     ResponseCode get_object(DataPacket &packet, Object *object);
     ResponseCode delete_object(Object *object);
@@ -101,8 +124,8 @@ class StorageManager {
     public:
         StorageManager() { }
 
-        inline void add_storage(const Storage &storage) {
-            this->storages[storage.id] = storage;
+        inline void add_storage(Storage &&storage) {
+            this->storages[storage.id] = std::move(storage);
         }
 
         ResponseCode find_storage(StorageId id, Storage **storage);

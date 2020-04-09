@@ -85,7 +85,7 @@ struct Result {
 
     constexpr inline Result() = default;
     constexpr inline Result(std::uint32_t code): value(code) { }
-    constexpr inline Result(std::uint32_t module, std::uint32_t desc): value((module & 0x1ff) | ((desc & 0x1fff) << 9)) { }
+    constexpr inline Result(std::uint32_t mod, std::uint32_t desc): value((mod & 0x1ff) | ((desc & 0x1fff) << 9)) { }
 
     static constexpr inline Result success() { return static_cast<Result>(0); }
     static constexpr inline Result failure() { return static_cast<Result>(-1); }
@@ -101,8 +101,8 @@ struct Result {
     constexpr inline operator bool() const { return succeeded(); }
     constexpr inline explicit operator std::uint32_t() const { return this->value; }
 
-    constexpr inline std::uint32_t code()   const { return this->value;}
-    constexpr inline std::uint32_t module() const { return (this->value & 0x1ff) | 2000; }
+    constexpr inline std::uint32_t code()   const { return this->value; }
+    constexpr inline std::uint32_t mod() const { return (this->value & 0x1ff) | 2000; }
     constexpr inline std::uint32_t desc()   const { return (this->value >> 9) & 0x3fff; }
 
     constexpr inline bool operator==(const Result &rhs) const {
@@ -294,7 +294,7 @@ static inline void log(const std::string &fmt, Args &&...args) {
 #define R_TRY_RETURN(x)     R_TRY(x, return _rc)
 #define R_TRY_RETURNV(x, v) R_TRY(x, return v)
 #define R_TRY_FATAL(x)      R_TRY(x, fatalThrow(_rc))
-#define R_TRY_LOG(x)        R_TRY(x, ERROR(STRINGIFY(x) " failed with %#x (%04d-%04d)\n", _rc, _rc.module(), _rc.desc()))
+#define R_TRY_LOG(x)        R_TRY(x, ERROR(STRINGIFY(x) " failed with %#x (%04d-%04d)\n", _rc.code(), _rc.mod(), _rc.desc()))
 
 #define MTP_TRY(x, cb) ({                                                        \
     if (::nq::mtp::ResponseCode _rc = (x); _rc != ::nq::mtp::ResponseCode::OK) { \

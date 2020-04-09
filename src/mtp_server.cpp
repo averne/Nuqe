@@ -151,20 +151,20 @@ ResponsePacket Server::get_device_info(const RequestPacket &request) {
     TRACE("Sending device info:\n");
     auto device_info = DataPacket(
         request,
-        standard_version,
-        vendor_extension_id,
-        vendor_extension_version,
-        mtp_extensions,
-        functional_mode,
-        supported_operations,
-        supported_events,
-        supported_device_properties,
-        supported_capture_formats,
-        supported_playback_formats,
-        manufacturer,
-        model,
-        version,
-        serial_number
+        info::standard_version,
+        info::vendor_extension_id,
+        info::vendor_extension_version,
+        info::mtp_extensions,
+        info::functional_mode,
+        info::supported_operations,
+        info::supported_events,
+        info::supported_device_properties,
+        info::supported_capture_formats,
+        info::supported_playback_formats,
+        info::manufacturer,
+        info::model,
+        info::version,
+        info::serial_number
     );
     return SEND_DPACKET(device_info);
 }
@@ -189,18 +189,13 @@ ResponsePacket Server::get_storage_ids(const RequestPacket &request) {
 }
 
 ResponsePacket Server::get_storage_info(const RequestPacket &request) {
-    TRACE("Sending storage info (storage %#08x):\n", request.get(0));
+    TRACE("Sending storage info (storage %#010x):\n", request.get(0));
 
     Storage *storage = nullptr;
     MTP_TRY_RETURN(this->storage_manager.find_storage(request.get(0), &storage));
 
-    auto &info = storage->storage_info;
-    auto storage_info = DataPacket(
-        request,
-        info.storage_type, info.filesystem_type,  info.access_capability,
-        info.max_capacity, info.free_space,       info.free_space_objects,
-        info.description,  info.volume_identifier
-    );
+    auto storage_info = DataPacket(request);
+    MTP_TRY_RETURN(storage->get_storage_info(storage_info));
     return SEND_DPACKET(storage_info);
 }
 
@@ -214,8 +209,11 @@ ResponsePacket Server::get_object_handles(const RequestPacket &request) {
     Storage *storage = nullptr;
     MTP_TRY_RETURN(this->storage_manager.find_storage(request.get(0), &storage));
 
+    Object *object = storage->find_handle(request.get(2));
+    TRY_RETURNV(object != nullptr, ResponseCode::Invalid_ObjectHandle);
+
     DataPacket object_handles(request);
-    MTP_TRY_RETURN(storage->get_object_handles(object_handles, request.get(2)));
+    MTP_TRY_RETURN(storage->get_object_handles(object_handles, object));
     return SEND_DPACKET(object_handles);
 }
 
@@ -252,7 +250,7 @@ ResponsePacket Server::get_object(const RequestPacket &request) {
 }
 
 ResponsePacket Server::send_object_info(const RequestPacket &request) {
-    TRACE("Sending object info (storage %#08x, parent %#x)\n", request.get(0), request.get(1));
+    TRACE("Sending object info (storage %#010x, parent %#x)\n", request.get(0), request.get(1));
     auto packet = DataPacket();
     R_TRY_RETURNV(packet.receive(), ResponseCode::General_Error);
 
@@ -290,7 +288,7 @@ ResponsePacket Server::get_device_prop_value(const RequestPacket &request) {
 }
 
 ResponsePacket Server::move_object(const RequestPacket &request) {
-    TRACE("Moving object (handle %#x, storage %#x, parent %#x)\n", request.get(0), request.get(1), request.get(2));
+    TRACE("Moving object (handle %#x, storage %#010x, parent %#x)\n", request.get(0), request.get(1), request.get(2));
 
     Storage *storage = nullptr; Object *object = nullptr;
     MTP_TRY_RETURN(this->storage_manager.find_handle(request.get(0), &storage, &object));
@@ -310,7 +308,7 @@ ResponsePacket Server::move_object(const RequestPacket &request) {
 }
 
 ResponsePacket Server::copy_object(const RequestPacket &request) {
-    TRACE("Copying object (handle %#x, storage %#x, parent %#x)\n", request.get(0), request.get(1), request.get(2));
+    TRACE("Copying object (handle %#x, storage %#010x, parent %#x)\n", request.get(0), request.get(1), request.get(2));
 
     Storage *storage = nullptr; Object *object = nullptr;
     MTP_TRY_RETURN(this->storage_manager.find_handle(request.get(0), &storage, &object));

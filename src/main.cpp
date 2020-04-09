@@ -91,10 +91,10 @@ int main(int argc, char **argv) {
     );
 
     nq::mtp::StorageManager man;
-    man.add_storage(sd_storage);
-    man.add_storage(user_storage);
-    man.add_storage(system_storage);
-    man.add_storage(calibration_storage);
+    man.add_storage(std::move(sd_storage));
+    man.add_storage(std::move(user_storage));
+    man.add_storage(std::move(system_storage));
+    man.add_storage(std::move(calibration_storage));
 
     auto server = nq::mtp::Server(man);
 

@@ -44,7 +44,7 @@ Storage::Storage(const fs::Filesystem &fs, StorageId id, const StorageInfo &stor
     // Register root object
     Object root_obj;
     root_obj.handle = root_handle;
-    root_obj.type   = Object::Type::Directory;
+    root_obj.format = ObjectFormatCode::Association;
     root_obj.name   = u"";
     root_obj.path   = "/";
     root_obj.size   = 0;
@@ -54,36 +54,63 @@ Storage::Storage(const fs::Filesystem &fs, StorageId id, const StorageInfo &stor
     update_storage_info();
 }
 
-ResponseCode Storage::get_object_handles(DataPacket &packet, Object::Handle dir_handle) {
-    auto &dir_object = this->objects[dir_handle];
-
+std::vector<Object::Handle> Storage::cache_directory(Object *object, std::uint32_t depth, std::uint32_t cur_depth) {
+    std::vector<Object::Handle> handles;
     fs::Directory dir;
-    R_TRY_RETURNV(this->fs.open_directory(dir, dir_object.path), ResponseCode::Access_Denied);
+    R_TRY_RETURNV(this->fs.open_directory(dir, object->path.c_str()), handles);
+    SCOPE_GUARD([&dir] { dir.close(); });
 
-    Array<Object::Handle> handles;
-    for (auto entry: dir.list()) {
-        auto path = dir_object.path + entry.name;
+    auto entries = dir.list();
+    handles.reserve(entries.size());
+
+    for (auto &&entry: entries) {
+        Object::Handle handle;
+        auto path = object->path + entry.name;
         if (auto obj = this->known_paths.find(path); obj != this->known_paths.end()) {
             // Object was already cached, return existing handle
-            handles.add(obj->second);
+            handle = obj->second;
         } else {
             // Object wasn't cached, register path + object
-            auto handle = Object::new_handle();
+            handle = Object::new_handle();
             this->known_paths[path] = handle;
 
             // Add slash terminator for directories
             if (entry.type == FsDirEntryType_Dir)
                 path += '/';
 
-            auto object = Object(entry, path, dir_object);
+            auto new_object = Object(entry, std::move(path), object);
 
-            this->objects[handle] = std::move(object);
-            handles.add(handle);
+            this->objects[handle] = std::move(new_object);
+        }
+
+        if (cur_depth == depth)
+            handles.push_back(handle);
+
+        if (cur_depth < depth) {
+            if (auto obj = this->objects[handle]; obj.is_directory()) {
+                auto o = this->cache_directory(&obj, depth, cur_depth + 1);
+                handles.reserve(handles.size() + o.size());
+                handles.insert(handles.end(), o.begin(), o.end());
+            }
         }
     }
 
-    dir.close();
-    packet.push(handles);
+    return handles;
+}
+
+ResponseCode Storage::get_storage_info(DataPacket &packet) {
+    this->update_storage_info();
+    packet.set_data(
+        this->storage_info.storage_type, this->storage_info.filesystem_type,  this->storage_info.access_capability,
+        this->storage_info.max_capacity, this->storage_info.free_space,       this->storage_info.free_space_objects,
+        this->storage_info.description,  this->storage_info.volume_identifier
+    );
+    return ResponseCode::OK;
+}
+
+ResponseCode Storage::get_object_handles(DataPacket &packet, Object *object) {
+    TRACE("Listing directory %s\n", object->path.c_str());
+    packet.push(Array<Object::Handle>(this->cache_directory(object)));
     return ResponseCode::OK;
 }
 
@@ -94,7 +121,7 @@ ResponseCode Storage::get_object_info(DataPacket &packet, Object *object) {
 
     // Query timestamp
     // TODO: Should be cached with object?
-    if (object->type == Object::Type::File) {
+    if (object->is_file()) {
         auto timestamp = this->fs.get_timestamp(object->path);
         info.created  = timestamp.created;
         info.modified = timestamp.modified;
@@ -105,7 +132,7 @@ ResponseCode Storage::get_object_info(DataPacket &packet, Object *object) {
 }
 
 ResponseCode Storage::get_object(DataPacket &packet, Object *object) {
-    TRACE("Path: %s, size: %#x\n", object->path.c_str(), object->size);
+    TRACE("Getting object %s (size: %#x)\n", object->path.c_str(), object->size);
     fs::File f;
     R_TRY_RETURNV(this->fs.open_file(f, object->path), ResponseCode::Access_Denied);
     SCOPE_GUARD([&f]() { f.close(); });
@@ -114,9 +141,9 @@ ResponseCode Storage::get_object(DataPacket &packet, Object *object) {
 }
 
 ResponseCode Storage::delete_object(Object *object) {
-    TRACE("Path: %s\n", object->path.c_str());
+    TRACE("Deleting object %s\n", object->path.c_str());
 
-    if (object->type == Object::Type::File)
+    if (object->is_file())
         R_TRY_RETURNV(this->fs.delete_file(object->path.c_str()), ResponseCode::Object_WriteProtected);
     else
         R_TRY_RETURNV(this->fs.delete_directory(object->path.c_str()), ResponseCode::Object_WriteProtected);
@@ -130,14 +157,14 @@ ResponseCode Storage::send_object_info(DataPacket &packet, Object::Handle parent
     auto  destination = parent.path + to_utf8(info.filename.chars);
 
     Object::new_handle();
-    auto obj = Object(info, destination, parent);
+    auto obj = Object(info, std::move(destination), parent);
 
-    if (obj.type == Object::Type::File)
+    if (obj.is_file())
         R_TRY_LOG(this->fs.create_file(obj.path, obj.size));
     else
         R_TRY_LOG(this->fs.create_directory(obj.path));
 
-    TRACE("Adding object %s, type %d, size %#lx\n", obj.path.c_str(), obj.type, obj.size);
+    TRACE("Adding object %s (type %d, size %#lx)\n", obj.path.c_str(), obj.type, obj.size);
     this->known_paths[obj.path] = obj.handle;
 
     if (info.format == ObjectFormatCode::Association)
@@ -148,7 +175,7 @@ ResponseCode Storage::send_object_info(DataPacket &packet, Object::Handle parent
 }
 
 ResponseCode Storage::send_object(DataPacket &packet, Object *object) {
-    TRACE("Path: %s, size: %#x\n", object->path.c_str(), object->size);
+    TRACE("Sending object %s (size: %#x)\n", object->path.c_str(), object->size);
     fs::File f;
     R_TRY_RETURNV(this->fs.open_file(f, object->path, FsOpenMode_Write), ResponseCode::Access_Denied);
     SCOPE_GUARD([&f]() { f.close(); });
@@ -158,7 +185,6 @@ ResponseCode Storage::send_object(DataPacket &packet, Object *object) {
 
 ResponseCode Storage::move_object(Object *object, Object::Handle parent_handle, Object::Handle &new_handle) {
     auto old_path = std::move(object->path);
-    TRACE("Path: %s\n", old_path.c_str());
 
     auto it = this->objects.find(parent_handle);
     if (it == this->objects.end())
@@ -166,9 +192,9 @@ ResponseCode Storage::move_object(Object *object, Object::Handle parent_handle, 
 
     auto &parent = it->second;
     object->path = parent.path + to_utf8(object->name.chars);
-    TRACE("Destination: %s\n", object->path.c_str());
+    TRACE("Moving object %s to %s\n", old_path.c_str(), object->path.c_str());
 
-    if (object->type == Object::Type::File)
+    if (object->is_file())
         R_TRY_RETURNV(this->fs.move_file(old_path, object->path), ResponseCode::General_Error);
     else
         R_TRY_RETURNV(this->fs.move_directory(old_path, object->path), ResponseCode::General_Error);
@@ -179,20 +205,18 @@ ResponseCode Storage::move_object(Object *object, Object::Handle parent_handle, 
 }
 
 ResponseCode Storage::copy_object(Object *object, Object::Handle parent_handle, Object::Handle &new_handle) {
-    TRACE("Path: %s\n", object->path.c_str());
-
     auto it = this->objects.find(parent_handle);
     if (it == this->objects.end())
         return ResponseCode::Invalid_ObjectHandle;
 
     auto destination = it->second.path + to_utf8(object->name.chars);
-    TRACE("Destination: %s\n", destination.c_str());
+    TRACE("Copying object %s to %s\n", object->path.c_str(), destination.c_str());
 
     auto new_object   = Object(*object);
     new_object.handle = Object::new_handle();
     new_object.path   = std::move(destination);
 
-    if (new_object.type == Object::Type::File) {
+    if (new_object.is_file()) {
         R_TRY_LOG(this->fs.create_file(new_object.path, new_object.size));
         R_TRY_RETURNV(this->fs.copy_file(object->path, new_object.path), ResponseCode::Store_Not_Available);
     } else {
@@ -207,7 +231,7 @@ ResponseCode Storage::copy_object(Object *object, Object::Handle parent_handle, 
 }
 
 ResponseCode Storage::get_partial_object(DataPacket &packet, Object *object, std::size_t offset, std::size_t size) {
-    TRACE("Path: %s, offset; %#x, size: %#x\n", object->path.c_str(), offset, size);
+    TRACE("Getting partial object %s (offset; %#x, size: %#x)\n", object->path.c_str(), offset, size);
     fs::File f;
     R_TRY_RETURNV(this->fs.open_file(f, object->path), ResponseCode::Access_Denied);
     SCOPE_GUARD([&f]() { f.close(); });
@@ -216,15 +240,16 @@ ResponseCode Storage::get_partial_object(DataPacket &packet, Object *object, std
 }
 
 ResponseCode Storage::get_object_prop_value(DataPacket &packet, Object *object, ObjectPropertyCode property) {
+    TRACE("Getting prop value for object %s\n", object->path.c_str());
     switch (property) {
         case ObjectPropertyCode::StorageID:
             packet.push(this->id);
             break;
         case ObjectPropertyCode::Object_Format:
-            packet.push(object->format());
+            packet.push(object->format);
             break;
         case ObjectPropertyCode::Object_Size:
-            if (object->type == Object::Type::Directory)
+            if (object->is_directory())
                 return ResponseCode::Invalid_ObjectPropCode;
             packet.push(static_cast<std::uint64_t>(object->size));
             break;
@@ -232,12 +257,12 @@ ResponseCode Storage::get_object_prop_value(DataPacket &packet, Object *object, 
             packet.push(object->name);
             break;
         case ObjectPropertyCode::Date_Created:
-            if (object->type == Object::Type::Directory)
+            if (object->is_directory())
                 return ResponseCode::Invalid_ObjectPropCode;
             packet.push(DateTime(this->fs.get_timestamp_created(object->path)));
             break;
         case ObjectPropertyCode::Date_Modified:
-            if (object->type == Object::Type::Directory)
+            if (object->is_directory())
                 return ResponseCode::Invalid_ObjectPropCode;
             packet.push(DateTime(this->fs.get_timestamp_modified(object->path)));
             break;
@@ -255,6 +280,7 @@ ResponseCode Storage::get_object_prop_value(DataPacket &packet, Object *object, 
 }
 
 ResponseCode Storage::set_object_prop_value(DataPacket &packet, Object *object, ObjectPropertyCode property) {
+    TRACE("Setting prop value for object %s\n", object->path.c_str());
     switch (property) {
         case ObjectPropertyCode::Object_File_Name: {
                 auto old_path = std::move(object->path);
@@ -262,7 +288,7 @@ ResponseCode Storage::set_object_prop_value(DataPacket &packet, Object *object, 
                 object->path  = object->parent->path + to_utf8(object->name.chars);
 
                 TRACE("Changing object name to %s\n", object->path.c_str());
-                if (object->type == Object::Type::File)
+                if (object->is_file())
                     this->fs.move_file(old_path, object->path);
                 else
                     this->fs.move_directory(old_path, object->path);
@@ -283,7 +309,7 @@ ResponseCode StorageManager::find_storage(StorageId id, Storage **storage) {
 }
 
 ResponseCode StorageManager::find_handle(Object::Handle handle, Storage **storage, Object **object) {
-    for (auto &s: this->storages) {
+    for (auto &&s: this->storages) {
         if (auto *obj = s.second.find_handle(handle); obj) {
             *storage = &s.second;
             *object = obj;
@@ -295,7 +321,7 @@ ResponseCode StorageManager::find_handle(Object::Handle handle, Storage **storag
 
 ResponseCode StorageManager::get_storage_ids(DataPacket &packet) const {
     Array<StorageId> ids;
-    for (auto &s: this->storages)
+    for (auto &&s: this->storages)
         ids.add(s.first);
     packet.push(ids);
     return ResponseCode::OK;

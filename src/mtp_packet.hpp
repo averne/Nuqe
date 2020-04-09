@@ -138,15 +138,14 @@ struct DataPacket {
     template <typename T, typename Type = std::remove_reference_t<std::remove_cv_t<T>>,
         std::enable_if_t<!traits::is_mtp_type_v<Type>, int> = 0>
     inline void push(T &&object) {
-        if (this->buffer.capacity() < this->buffer.size() + sizeof(Type))
-            this->buffer.reserve(this->buffer.size() + sizeof(Type));
+        static_assert(std::is_standard_layout_v<Type>);
+        this->buffer.reserve(this->buffer.size() + sizeof(Type));
         std::copy_n(reinterpret_cast<const std::uint8_t *>(&object), sizeof(Type), std::back_inserter(this->buffer));
     }
 
     template <typename T>
     inline void push(const Array<T> &arr) {
-        if (this->buffer.capacity() < this->buffer.size() + arr.size())
-            this->buffer.reserve(this->buffer.size() + arr.size());
+        this->buffer.reserve(this->buffer.size() + arr.size());
         std::copy_n(reinterpret_cast<const std::uint8_t *>(&arr.num_elements), sizeof(Array<T>::num_elements),
             std::back_inserter(this->buffer));
         std::copy_n(reinterpret_cast<const std::uint8_t *>(arr.elements.data()), arr.size() - sizeof(Array<T>::num_elements),
@@ -154,8 +153,7 @@ struct DataPacket {
     }
 
     inline void push(const String &str) {
-        if (this->buffer.capacity() < this->buffer.size() + str.size())
-            this->buffer.reserve(this->buffer.size() + str.size());
+        this->buffer.reserve(this->buffer.size() + str.size());
         std::copy_n(reinterpret_cast<const std::uint8_t *>(&str.num_chars), sizeof(String::num_chars),
             std::back_inserter(this->buffer));
         std::copy_n(reinterpret_cast<const std::uint8_t *>(str.chars.data()), str.size() - sizeof(String::num_chars),

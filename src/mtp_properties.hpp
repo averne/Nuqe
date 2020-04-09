@@ -1,9 +1,46 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "mtp_codes.hpp"
+#include "mtp_object.hpp"
 #include "mtp_packet.hpp"
 
 namespace nq::mtp::props {
+
+namespace dev {
+
+static inline String device_friendly_name    = u"Switch";
+static inline String synchronization_partner = u"Nuqe";
+
+} // namespace dev
+
+namespace obj {
+
+static inline std::unordered_map<ObjectFormatCode, std::vector<ObjectPropertyCode>> supported = {
+    {
+        ObjectFormatCode::Undefined, std::vector{
+            ObjectPropertyCode::StorageID,
+            ObjectPropertyCode::Object_Format,
+            ObjectPropertyCode::Object_Size,
+            ObjectPropertyCode::Object_File_Name,
+            ObjectPropertyCode::Date_Created,
+            ObjectPropertyCode::Date_Modified,
+            ObjectPropertyCode::Parent_Object,
+        }
+    },
+    {
+        ObjectFormatCode::Association, std::vector{
+            ObjectPropertyCode::StorageID,
+            ObjectPropertyCode::Object_Format,
+            ObjectPropertyCode::Object_File_Name,
+            ObjectPropertyCode::Parent_Object,
+        }
+    },
+};
+
+} // namespace obj
+
 
 template <typename T>
 struct DevicePropDesc {
