@@ -67,6 +67,12 @@ enum class OperationCode: TransactionCode {
     GetObjectReferences                         = 0x9810,
     SetObjectReferences                         = 0x9811,
     Skip                                        = 0x9820,
+
+    // Enhanced operations
+    GetObjectPropList                           = 0x9805,
+    SetObjectPropList                           = 0x9806,
+    GetInterdependentPropDesc                   = 0x9807,
+    SendObjectPropList                          = 0x9808,
 };
 
 enum class ResponseCode: TransactionCode {

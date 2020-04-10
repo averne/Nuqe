@@ -14,61 +14,6 @@
 
 namespace nq::mtp {
 
-namespace {
-
-static inline std::uint16_t standard_version         = 100;        // PTP version: 1.0.0
-static inline std::uint32_t vendor_extension_id      = 6;          // MTP id -- Spec specifies 0xffffffff should be used but libmtp warns that this id is usually used by PTP devices
-static inline std::uint16_t vendor_extension_version = 110;        // MTP version: 1.1.0
-static inline String        mtp_extensions           = {};
-static inline std::uint16_t functional_mode          = 0;
-static inline String        manufacturer             = u"Nintendo";
-static inline String        model                    = u"Switch";
-static inline String        version                  = u"Unknown";
-static inline String        serial_number            = u"Unknown";
-
-static inline Array<OperationCode> supported_operations = std::array{
-    OperationCode::GetDeviceInfo,
-    OperationCode::OpenSession,
-    OperationCode::CloseSession,
-    OperationCode::GetStorageIDs,
-    OperationCode::GetStorageInfo,
-    OperationCode::GetObjectHandles,
-    OperationCode::GetObjectInfo,
-    OperationCode::GetObject,
-    OperationCode::DeleteObject,
-    OperationCode::SendObjectInfo,
-    OperationCode::SendObject,
-    OperationCode::GetDevicePropDesc,
-    OperationCode::GetDevicePropValue,
-    OperationCode::MoveObject,
-    OperationCode::CopyObject,
-    OperationCode::GetPartialObject,
-    OperationCode::GetObjectPropsSupported,
-    OperationCode::GetObjectPropDesc,
-    OperationCode::GetObjectPropValue,
-    OperationCode::SetObjectPropValue,
-};
-
-static inline Array<EventCode> supported_events = std::array{
-    EventCode::Undefined,
-};
-
-static inline Array<DevicePropertyCode> supported_device_properties = std::array{
-    DevicePropertyCode::Device_Friendly_Name,
-    DevicePropertyCode::Synchronization_Partner,
-};
-
-static inline Array<ObjectFormatCode> supported_capture_formats = std::array{
-    ObjectFormatCode::Undefined,
-};
-
-static inline Array<ObjectFormatCode> supported_playback_formats = std::array{
-    ObjectFormatCode::Undefined,
-    ObjectFormatCode::Association,
-};
-
-} // namespace
-
 Result Server::process() {
     RequestPacket request;
     R_TRY_RETURN(request.receive());
@@ -141,6 +86,8 @@ ResponsePacket Server::handle_request(const RequestPacket &request) {
             return this->get_object_prop_value(request);
         case OperationCode::SetObjectPropValue:
             return this->set_object_prop_value(request);
+        case OperationCode::GetObjectPropList:
+            return this->get_object_prop_list(request);
         default:
             ERROR("Request %#x not implemented\n", request.header.code);
             return ResponseCode::Invalid_TransactionID;
@@ -372,6 +319,19 @@ ResponsePacket Server::set_object_prop_value(const RequestPacket &request) {
     MTP_TRY_RETURN(this->storage_manager.find_handle(request.get(0), &storage, &object));
 
     return storage->set_object_prop_value(prop_value, object, request.get<ObjectPropertyCode>(1));
+}
+
+ResponsePacket Server::get_object_prop_list(const RequestPacket &request) {
+    TRACE("Getting object prop list: (handle %#x, format %#x, prop code %#x, prop group code %#x, depth %#x)\n",
+        request.get(0), request.get(1), request.get(2), request.get(3), request.get(4));
+
+    Storage *storage = nullptr; Object *object = nullptr;
+    MTP_TRY_RETURN(this->storage_manager.find_handle(request.get(0), &storage, &object));
+
+    auto prop_list = DataPacket(request);
+    MTP_TRY_RETURN(storage->get_object_prop_list(prop_list, object,
+        request.get<ObjectFormatCode>(1), request.get<ObjectPropertyCode>(2), request.get(3), request.get(4)));
+    return SEND_DPACKET(prop_list);
 }
 
 } // namespace nq::mtp

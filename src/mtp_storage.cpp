@@ -56,6 +56,12 @@ Storage::Storage(const fs::Filesystem &fs, StorageId id, const StorageInfo &stor
 
 std::vector<Object::Handle> Storage::cache_directory(Object *object, std::uint32_t depth, std::uint32_t cur_depth) {
     std::vector<Object::Handle> handles;
+
+    if (depth == 0) {
+        handles.push_back(object->handle);
+        return handles;
+    }
+
     fs::Directory dir;
     R_TRY_RETURNV(this->fs.open_directory(dir, object->path.c_str()), handles);
     SCOPE_GUARD([&dir] { dir.close(); });
@@ -297,6 +303,49 @@ ResponseCode Storage::set_object_prop_value(DataPacket &packet, Object *object, 
             ERROR("Object prop value %#x not implemented\n", property);
             return ResponseCode::Invalid_ObjectPropCode;
     }
+    return ResponseCode::OK;
+}
+
+ResponseCode Storage::get_object_prop_list(DataPacket &packet, Object *object,
+        ObjectFormatCode format, ObjectPropertyCode prop, std::uint32_t group_code, std::uint32_t depth) {
+    constexpr auto all_props   = static_cast<ObjectPropertyCode>(0xffffffff);
+    constexpr auto all_formats = static_cast<ObjectFormatCode>(0);
+
+    if (group_code)
+        return ResponseCode::Specification_By_Group_Unsupported;
+
+    auto handles = this->cache_directory(object, depth);
+    packet.buffer.reserve(0x10 * handles.size());
+
+    std::uint32_t nb_props = 0;
+    packet.push(0u); // Reserve nb props
+
+    for (auto &&handle: handles) {
+        auto &obj = this->objects[handle];
+
+        if ((format != all_formats) && (obj.format != format))
+            continue;
+
+#define PUSH_PROP(property, type, item, cond)                                           \
+    if ((cond) && ((prop == all_props) || (prop == ObjectPropertyCode::property))) {    \
+        ++nb_props;                                                                     \
+        packet.push(obj.handle);                                                        \
+        packet.push(ObjectPropertyCode::property);                                      \
+        packet.push(TypeCode::type);                                                    \
+        packet.push(item);                                                              \
+    }
+        PUSH_PROP(StorageID, UINT32, this->id, true);
+        PUSH_PROP(Object_Format, UINT16, obj.format, true);
+        PUSH_PROP(Object_File_Name, STR, obj.name, true);
+        PUSH_PROP(Parent_Object, UINT32, obj.parent->handle, true);
+        PUSH_PROP(Object_Size, UINT64, obj.size, obj.is_file());
+        PUSH_PROP(Date_Created, STR, DateTime(this->fs.get_timestamp_created(obj.path)), obj.is_file());
+        PUSH_PROP(Date_Modified, STR, DateTime(this->fs.get_timestamp_modified(obj.path)), obj.is_file());
+#undef PUSH_PROP
+    }
+
+    *reinterpret_cast<std::uint32_t *>(packet.buffer.begin().base()) = nb_props;
+
     return ResponseCode::OK;
 }
 

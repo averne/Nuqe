@@ -94,7 +94,7 @@ struct Storage {
         this->storage_info.max_capacity = this->fs.total_space();
     }
 
-    std::vector<Object::Handle> cache_directory(Object *object, std::uint32_t depth = 0, std::uint32_t cur_depth = 0);
+    std::vector<Object::Handle> cache_directory(Object *object, std::uint32_t depth = 1, std::uint32_t cur_depth = 1);
 
     ResponseCode get_storage_info(DataPacket &packet);
     ResponseCode get_object_handles(DataPacket &packet, Object *object);
@@ -108,6 +108,8 @@ struct Storage {
     ResponseCode get_partial_object(DataPacket &packet, Object *object, std::size_t offset, std::size_t size);
     ResponseCode get_object_prop_value(DataPacket &packet, Object *object, ObjectPropertyCode property);
     ResponseCode set_object_prop_value(DataPacket &packet, Object *object, ObjectPropertyCode property);
+    ResponseCode get_object_prop_list(DataPacket &packet, Object *object,
+        ObjectFormatCode format, ObjectPropertyCode prop, std::uint32_t group_code, std::uint32_t depth);
 
     inline Object *find_handle(Object::Handle handle) {
         if (auto it = this->objects.find(handle); it != this->objects.end())

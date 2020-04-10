@@ -45,6 +45,7 @@ static inline Array<OperationCode> supported_operations = std::array{
     OperationCode::GetObjectPropDesc,
     OperationCode::GetObjectPropValue,
     OperationCode::SetObjectPropValue,
+    OperationCode::GetObjectPropList,
 };
 
 static inline Array<EventCode> supported_events = std::array{
@@ -97,6 +98,7 @@ class Server {
         ResponsePacket get_object_prop_desc(const RequestPacket &request);
         ResponsePacket get_object_prop_value(const RequestPacket &request);
         ResponsePacket set_object_prop_value(const RequestPacket &request);
+        ResponsePacket get_object_prop_list(const RequestPacket &request);
 
     private:
         StorageManager storage_manager;

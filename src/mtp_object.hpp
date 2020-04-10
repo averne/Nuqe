@@ -46,7 +46,7 @@ struct Object {
     }
 
     inline constexpr bool is_file() const {
-        return this->format == ObjectFormatCode::Undefined;
+        return !this->is_directory();
     }
 };
 
