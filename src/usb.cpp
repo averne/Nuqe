@@ -181,17 +181,17 @@ static inline Result init_mtp_interface() {
 }
 
 static void state_change_func() {
-    u32 state;
+    ::UsbState state;
     auto state_change_event = usbDsGetStateChangeEvent();
 
     while (!g_state_thread_should_exit) {
         if (R_SUCCEEDED(eventWait(state_change_event, 0)) && R_SUCCEEDED(usbDsGetState(&state))) {
             switch (state) {
-                case 0 ... 4:
-                case 6:
+                case UsbState_Detached ... UsbState_Address:
+                case UsbState_Suspended:
                     g_state = UsbState::Busy;
                     break;
-                case 5:
+                case UsbState_Configured:
                     g_state = UsbState::Ready;
                     break;
             }
