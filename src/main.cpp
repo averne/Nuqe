@@ -24,9 +24,12 @@ extern "C" void __libnx_exception_handler(ThreadExceptionDump *ctx) {
 using namespace std::chrono_literals;
 
 void exit_thread_func(bool *should_exit) {
+    PadState pad;
+    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+    padInitializeDefault(&pad);
     while (appletMainLoop()) {
-        hidScanInput();
-        if (hidKeysDown(CONTROLLER_P1_AUTO) & KEY_PLUS)
+        padUpdate(&pad);
+        if (padGetButtonsDown(&pad) & HidNpadButton_Plus)
             break;
         std::this_thread::sleep_for(10ms);
     }
