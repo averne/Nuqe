@@ -5,5 +5,8 @@
         "*.elf": true,
         "*.nacp": true,
         "*.nro": true
+    },
+    "files.associations": {
+        "thread": "cpp"
     }
 }

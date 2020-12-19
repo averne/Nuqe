@@ -25,8 +25,12 @@ using namespace std::chrono_literals;
 
 void exit_thread_func(bool *should_exit) {
     while (appletMainLoop()) {
-        hidScanInput();
-        if (hidKeysDown(CONTROLLER_P1_AUTO) & KEY_PLUS)
+        padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+        PadState pad;
+        padInitializeDefault(&pad);
+        padUpdate(&pad);
+        u64 kDown = padGetButtonsDown(&pad);
+        if (kDown & HidNpadButton_Plus)
             break;
         std::this_thread::sleep_for(10ms);
     }
